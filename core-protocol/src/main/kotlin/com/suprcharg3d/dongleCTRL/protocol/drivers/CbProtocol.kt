@@ -185,7 +185,7 @@ class CbProtocol(
         presetId: Int
     ): Boolean {
         val sampleRate = if (profile.sampleRate > 0) profile.sampleRate else 96_000
-        val coeffs = BiquadCalculator.compute(band, sampleRate)
+        val coeffs = BiquadCalculator.computeForCbQ2_30(band, sampleRate)
         val q30 = BiquadCalculator.quantizeCbQ2_30(coeffs)
 
         val pkt = ByteArray(64)

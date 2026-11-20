@@ -36,6 +36,61 @@ class DspTests {
     }
 
     @Test
+    fun `Q2_30 high shelf at +12 dB stays in range and keeps a shelf shape`() {
+        val band = EqBand(
+            index = 0,
+            frequencyHz = 8000,
+            gainDb = 12.0,
+            q = 0.7,
+            filterType = FilterType.HIGH_SHELF
+        )
+        val designed = BiquadCalculator.compute(band, sampleRate = 96_000)
+        assertTrue(
+            "designed High Shelf +12 dB should overflow Q2.30 (true b0=${designed.b0}, b1=${designed.b1})",
+            !BiquadCalculator.isRepresentableInQ2_30(designed)
+        )
+
+        val fitted = BiquadCalculator.computeForCbQ2_30(band, sampleRate = 96_000)
+        assertTrue(
+            "fitted coefficients must be representable in Q2.30 (b0=${fitted.b0}, b1=${fitted.b1})",
+            BiquadCalculator.isRepresentableInQ2_30(fitted)
+        )
+        // Use almost the full signed range rather than collapsing to a tiny shelf.
+        val maxAbs = maxOf(abs(fitted.b0), abs(fitted.b1), abs(fitted.b2), abs(fitted.a1), abs(fitted.a2))
+        assertTrue("fitted max |coeff| $maxAbs should be close to the Q2.30 limit of 2", maxAbs in 1.9..2.0)
+
+        val q30 = BiquadCalculator.quantizeCbQ2_30(fitted)
+        val scale = 1073741824.0 // 2^30
+        q30.forEachIndexed { i, word ->
+            val reconstructed = word / scale
+            assertTrue("packed q30[$i]=$word is outside Q2.30", reconstructed in -2.0..2.0)
+        }
+        assertEquals(fitted.b0, q30[0] / scale, 1.5e-9)
+        assertEquals(fitted.b1, q30[1] / scale, 1.5e-9)
+        assertEquals(fitted.b2, q30[2] / scale, 1.5e-9)
+
+        val lowDb = evaluateCoeffsDb(fitted, freqHz = 100.0, sampleRate = 96_000)
+        val highDb = evaluateCoeffsDb(fitted, freqHz = 16_000.0, sampleRate = 96_000)
+        assertTrue("low-frequency response should stay near 0 dB, was $lowDb", abs(lowDb) < 1.0)
+        assertTrue("high-frequency shelf should still boost, was $highDb", highDb in 3.0..8.0)
+    }
+
+    private fun evaluateCoeffsDb(c: BiquadCoeffs, freqHz: Double, sampleRate: Int): Double {
+        val w = 2.0 * Math.PI * freqHz / sampleRate.toDouble()
+        val cosW = kotlin.math.cos(w)
+        val sinW = kotlin.math.sin(w)
+        val cos2W = kotlin.math.cos(2.0 * w)
+        val sin2W = kotlin.math.sin(2.0 * w)
+        val numRe = c.b0 + c.b1 * cosW + c.b2 * cos2W
+        val numIm = -(c.b1 * sinW + c.b2 * sin2W)
+        val denRe = 1.0 + c.a1 * cosW + c.a2 * cos2W
+        val denIm = -(c.a1 * sinW + c.a2 * sin2W)
+        val numSq = numRe * numRe + numIm * numIm
+        val denSq = kotlin.math.max(1e-18, denRe * denRe + denIm * denIm)
+        return 10.0 * kotlin.math.log10(kotlin.math.max(1e-18, numSq / denSq))
+    }
+
+    @Test
     fun `CX31993 24-bit quantizer fits within signed 24-bit bounds`() {
         val band = EqBand(index = 0, frequencyHz = 8000, gainDb = 12.0, q = 0.7, filterType = FilterType.HIGH_SHELF)
         val q = BiquadCalculator.quantizeCx31993(BiquadCalculator.compute(band, 48_000))
