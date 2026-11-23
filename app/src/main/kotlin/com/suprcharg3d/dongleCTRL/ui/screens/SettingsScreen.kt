@@ -116,7 +116,7 @@ fun SettingsScreen(
             SettingActionRow(
                 icon = Icons.Rounded.Info,
                 title = "About dongleCTRL",
-                valueText = "v1.1",
+                valueText = "v1.1.1",
                 showDivider = false,
                 onClick = { showAboutDialog = true }
             )

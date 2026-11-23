@@ -119,7 +119,7 @@ dongleCTRL
 ## Teknologi & Persyaratan
 
 - **Application ID / Namespace:** `com.suprcharg3d.dongleCTRL`
-- **Versi:** `1.1` (`versionCode = 3`)
+- **Versi:** `1.1.1` (`versionCode = 4`)
 - **SDK Minimum:** Android 8.0 (API 26)
 - **Target / Compile SDK:** Android 16 (API 36)
 - **Bahasa & Build:** Kotlin `2.2.10`, Android Gradle Plugin `9.1.1`, toolchain Java 17
