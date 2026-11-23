@@ -1069,4 +1069,54 @@ class ProtocolTests {
         assertEquals(120, FiioSchemaControlsHelper.resolveStepMax(ka5Schema, 0, 60))
         assertEquals(60, FiioSchemaControlsHelper.resolveStepMax(ka5Schema, 1, 60))
     }
+
+    @Test
+    fun `CbProtocol maps 0x19 to Gain Level and 0x1D to Amp Work Mode`() = runTest {
+        val cbProto = CbProtocol(isSurround3dFamily = false)
+        val profile = DacProfile(
+            id = "epz_3302_43e6_tp35_pro",
+            brand = "EPZ",
+            model = "TP35 Pro",
+            vendorId = 0x3302,
+            productId = 0x43E6,
+            protocol = ProtocolFamily.CB,
+            schemeNo = "16",
+            bandCount = 10,
+            supportsMic = true,
+            supportsDacFilter = true
+        )
+
+        val caps = cbProto.buildCapabilities(profile)
+        assertEquals(listOf("Class AB", "Class H"), caps.outputModeOptions.map { it.label })
+        assertEquals(listOf("Low Gain", "High Gain"), caps.workModeOptions.map { it.label })
+
+        val tx = object : FakeTransport() {
+            override suspend fun transceive(request: ByteArray, expectedSize: Int, timeoutMs: Int): ByteArray {
+                sent.add(request.copyOf())
+                val cmd = request[2].toInt() and 0xFF
+                val resp = ByteArray(64)
+                resp[0] = 0x4B
+                resp[1] = 0x80.toByte()
+                resp[2] = cmd.toByte()
+                when (cmd) {
+                    0x19 -> resp[4] = 1 // Gain = High Gain -> workModeIndex = 1
+                    0x1D -> resp[4] = 0 // Amp Work Mode = Class AB -> outputModeIndex = 0
+                }
+                return resp
+            }
+        }
+
+        val state = cbProto.readDeviceState(tx, profile)
+        assertEquals(1, state.workModeIndex)
+        assertEquals(0, state.outputModeIndex)
+
+        tx.sent.clear()
+        assertTrue(cbProto.setWorkMode(tx, profile, 1))   // Gain Level = High Gain -> 0x19
+        assertTrue(cbProto.setOutputMode(tx, profile, 1)) // Amp Work Mode = Class H -> 0x1D
+
+        assertEquals(0x19, tx.sent[0][2].toInt() and 0xFF)
+        assertEquals(0x01, tx.sent[0][4].toInt() and 0xFF)
+        assertEquals(0x1D, tx.sent[1][2].toInt() and 0xFF)
+        assertEquals(0x01, tx.sent[1][4].toInt() and 0xFF)
+    }
 }

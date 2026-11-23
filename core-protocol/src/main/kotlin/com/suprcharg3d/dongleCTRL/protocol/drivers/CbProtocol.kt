@@ -322,9 +322,12 @@ class CbProtocol(
         private const val CMD_FW_VERSION = 0x0C
         private const val CMD_DAC_FILTER = 0x11
         private const val CMD_CHANNEL_BALANCE = 0x16
-        private const val CMD_OUTPUT_MODE = 0x19
+        // CB HID registers verified on EPZ TP35 Pro / TRN Black Pearl:
+        // 0x19 = Gain Level (0 = Low Gain, 1 = High Gain) -> UI workModeOptions
+        // 0x1D = Amp Work Mode (0 = Class AB, 1 = Class H) -> UI outputModeOptions
+        private const val CMD_WORK_MODE = 0x19
         private const val CMD_ENC = 0x1B
-        private const val CMD_WORK_MODE = 0x1D
+        private const val CMD_OUTPUT_MODE = 0x1D
         private const val CMD_3D_SWITCH = 0x22
 
         private val POSITIVE_BALANCE_MAP = intArrayOf(
