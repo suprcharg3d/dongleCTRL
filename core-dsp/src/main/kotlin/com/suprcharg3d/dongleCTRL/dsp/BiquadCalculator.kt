@@ -40,6 +40,9 @@ object BiquadCalculator {
 
     private const val Q2_30_SCALE = 1073741824.0 // 2^30
     private const val Q5_27_SCALE = 134217728.0  // 2^27
+    // Signed Q2.30 range: [-2, 2 - 2^-30]. Int.MIN_VALUE is exactly -2.0.
+    private const val Q2_30_MIN = -2.0
+    private const val Q2_30_MAX = Int.MAX_VALUE / Q2_30_SCALE
 
     fun compute(band: EqBand, sampleRate: Int): BiquadCoeffs {
         if (!band.enabled) return BiquadCoeffs.BYPASS
@@ -135,15 +138,68 @@ object BiquadCalculator {
     }
 
     /**
+     * True when every a0-normalized coefficient fits in signed Q2.30.
+     */
+    fun isRepresentableInQ2_30(c: BiquadCoeffs): Boolean {
+        val values = doubleArrayOf(c.b0, c.b1, c.b2, c.a1, c.a2)
+        return values.all { it.isFinite() && it in Q2_30_MIN..Q2_30_MAX }
+    }
+
+    /**
+     * RBJ coefficients for the WalkPlay / EPZ CB wire format.
+     *
+     * The HID packet carries five Q2.30 words [b0, b1, b2, -a1, -a2] and has no
+     * gain-shift field (unlike [quantizeCx31993]). Coefficients outside
+     * [-2, 2 - 2^-30] cannot be sent as-is; saturating each word independently
+     * would destroy the b/a ratio and produce the wrong filter (a typical
+     * High Shelf at +12 dB overflows, with |b1| ≈ 4.56 at 8 kHz / 96 kHz).
+     *
+     * When the designed biquad overflows, this keeps frequency and Q and
+     * reduces |gain| to the largest value that still fits, so the hardware
+     * gets a valid same-type shelf rather than a clipped, misshapen one.
+     * Non-finite input yields [BiquadCoeffs.BYPASS] and does not throw.
+     */
+    fun computeForCbQ2_30(band: EqBand, sampleRate: Int): BiquadCoeffs {
+        if (!band.enabled) return BiquadCoeffs.BYPASS
+        if (!band.gainDb.isFinite()) return BiquadCoeffs.BYPASS
+        val direct = compute(band, sampleRate)
+        if (isRepresentableInQ2_30(direct)) return direct
+
+        var loT = 0.0
+        var hiT = 1.0
+        var best = compute(band.copy(gainDb = 0.0), sampleRate)
+        repeat(40) {
+            val midT = (loT + hiT) / 2.0
+            val candidate = compute(band.copy(gainDb = midT * band.gainDb), sampleRate)
+            if (isRepresentableInQ2_30(candidate)) {
+                best = candidate
+                loT = midT
+            } else {
+                hiT = midT
+            }
+        }
+        return best
+    }
+
+    /**
      * WalkPlay / EPZ CB family quantization: Q2.30 signed 32-bit in order [b0, b1, b2, -a1, -a2].
+     * Non-finite values become 0 (does not throw). Out-of-range values are clamped
+     * as a last resort — callers that write CB hardware should use [computeForCbQ2_30] first.
      */
     fun quantizeCbQ2_30(c: BiquadCoeffs): IntArray = intArrayOf(
-        (c.b0 * Q2_30_SCALE).roundToInt(),
-        (c.b1 * Q2_30_SCALE).roundToInt(),
-        (c.b2 * Q2_30_SCALE).roundToInt(),
-        (-c.a1 * Q2_30_SCALE).roundToInt(),
-        (-c.a2 * Q2_30_SCALE).roundToInt()
+        toQ2_30(c.b0),
+        toQ2_30(c.b1),
+        toQ2_30(c.b2),
+        toQ2_30(-c.a1),
+        toQ2_30(-c.a2)
     )
+
+    private fun toQ2_30(value: Double): Int {
+        if (!value.isFinite()) return 0
+        val scaled = value * Q2_30_SCALE
+        if (!scaled.isFinite()) return 0
+        return scaled.roundToInt().coerceIn(Int.MIN_VALUE, Int.MAX_VALUE)
+    }
 
     /**
      * CB1100AU / GM55 quantization: Q5.27 signed 32-bit in order [b0, b2, -a1, b1, -a2].
