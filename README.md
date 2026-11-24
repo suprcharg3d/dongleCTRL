@@ -25,15 +25,16 @@
 
 **dongleCTRL** (`com.suprcharg3d.dongleCTRL`) adalah aplikasi Android native yang dibangun dengan Kotlin dan Jetpack Compose (Material 3) untuk mengonfigurasi dongle DAC USB-C, DAC USB desktop, dan DAC/AMP Bluetooth nirkabel langsung melalui protokol perangkat kerasnya.
 
-Alih-alih membungkus situs web pabrikan, dongleCTRL mengimplementasikan protokol biner native melalui **USB HID**, **USB Serial (CDC)**, **Bluetooth Classic SPP**, dan **Bluetooth Low Energy (BLE GATT)** untuk 15 keluarga protokol, berjalan secara lokal di perangkat tanpa akun ataupun ketergantungan jaringan.
+Alih-alih membungkus situs web pabrikan, dongleCTRL mengimplementasikan protokol biner native melalui **USB HID**, **USB Serial (CDC)**, **Bluetooth Classic SPP**, dan **Bluetooth Low Energy (BLE GATT)** untuk **29 keluarga protokol**, berjalan secara lokal di perangkat tanpa akun ataupun ketergantungan jaringan.
 
 ---
 
 ## Fitur
 
 - **Deteksi & Manajemen Perangkat Multiprotokol (`DEVICES`)**
-  - Deteksi otomatis melalui USB-C OTG (HID + CDC/Serial) dan Bluetooth (Classic SPP + BLE GATT), didukung katalog bawaan berisi **498 profil perangkat**, **76 skema kontrol FiiO**, dan **89 ilustrasi perangkat**
+  - Deteksi otomatis melalui USB-C OTG (HID + CDC/Serial) dan Bluetooth (Classic SPP + BLE GATT), didukung katalog bawaan berisi **626 profil perangkat**, **76 skema kontrol FiiO**, dan **205 ilustrasi perangkat**
   - Pengaturan manual keluarga protokol per perangkat USB untuk dongle generik atau perangkat yang belum terdaftar
+  - Opsi **Auto-Open on USB Connect** (bawaan nonaktif) agar aplikasi tidak otomatis terbuka setiap kali DAC USB dicolokkan kecuali diaktifkan di Settings
 - **Parametric EQ Interaktif (`Equalizer`)**
   - Kurva respons frekuensi logaritmik real-time (`20 Hz – 20 kHz`) dengan titik kontrol yang dapat digeser dan pratinjau kurva masing-masing band secara terpisah
   - Tata letak responsif untuk ponsel guna mencegah guliran vertikal yang tidak disengaja saat menggeser titik di grafik
@@ -50,11 +51,11 @@ Alih-alih membungkus situs web pabrikan, dongleCTRL mengimplementasikan protokol
     - Meminta memilih **Slot Kustom Pengguna** pada DAC yang memiliki beberapa slot (misalnya FiiO `USER1`–`USER10`), dan otomatis berpindah ke slot yang dapat ditulis sebelum menerapkan serta menyimpan ke flash agar preset bawaan pabrik tidak tertimpa
     - Membaca jumlah band aktif (bukan 0 dB / tidak di-bypass) terhadap kapasitas DAC target: langsung menerapkan tanpa pop-up apabila jumlah band aktif muat di DAC (termasuk preset 10-band yang hanya memakai 5 band aktif diterapkan ke DAC 5-band), atau menampilkan dialog pemilihan band apabila melebihi batas band DAC
 - **Kontrol Perangkat Keras & Berbasis Skema (`Dashboard`)**
-  - **Filter Digital DAC**, **Level Gain**, **Keseimbangan Kanal L/R**, **Sakelar Hardware EQ**, **Slot Preset Hardware & Ubah Nama Slot Kustom**, serta **Volume Hardware** (termasuk skala 60/120 langkah pada perangkat yang mendukung)
-  - Kontrol dinamis berbasis skema untuk perangkat FiiO USB & Bluetooth (mode scene, kecerahan/timeout layar, mode UAC, batas volume, indikator RGB, gestur tombol, telemetri baterai/codec, ubah nama Bluetooth, dan aksi perangkat keras)
-- **Log Debug Protokol & Tema (`SETTINGS`)**
+  - **Filter Digital DAC**, **Level Gain / Amp Work Mode**, **Keseimbangan Kanal L/R** (`±12` atau `±50` pada NICEHCK TTGK), **Sakelar Hardware EQ**, **Indikator LED**, **Slot Preset Hardware & Ubah Nama Slot Kustom**, serta **Volume Hardware** (skala 60/100/120 langkah pada perangkat yang mendukung)
+  - Kontrol dinamis berbasis skema dan fitur perangkat untuk FiiO USB & Bluetooth, Tanchjim BT/USB, NICEHCK OriG in, serta Moondrop (ANC/Transparency, cycle order, Wind Noise Reduction, Dynamic Bass, Spatial Audio, gestur sentuh, telemetri baterai/codec, aksi manajemen perangkat). Perangkat OTA-only seperti `FIIO BTR11` otomatis menyembunyikan PEQ/kontrol yang tidak tersedia
+- **Log Debug Protokol, Preferensi & Tema (`SETTINGS`)**
   - Penampil jejak paket mentah real-time (frame heksadesimal `TX` / `RX` di USB HID, Serial, SPP, dan BLE) dengan tombol **Copy** dan **Clear**
-  - Tema Material 3 `Follow System`, `Dark`, dan `Light`
+  - Pengaturan **Instant Live PEQ Sync**, **Auto-Open on USB Connect**, serta tema Material 3 `Follow System`, `Dark`, dan `Light`
 
 ---
 
@@ -62,17 +63,28 @@ Alih-alih membungkus situs web pabrikan, dongleCTRL mengimplementasikan protokol
 
 | Driver | Varian `ProtocolFamily` | Transpor | Chipset / Perangkat Umum |
 | :--- | :--- | :--- | :--- |
-| `CbProtocol` | `CB`, `CB1300D` | USB HID (`0x4B`) | Dongle DSP & headset surround EPZ, WalkPlay, Comtrue/TTGK CB |
+| `CbProtocol` | `CB`, `CB1300D` | USB HID (`0x4B`) | EPZ, WalkPlay, Tanchjim (`Bunny DSP`, `Space Pro`, `Stargate 2`, `Echo`, `Fola`, dll.), NICEHCK (`PureAural`, `Octave`, `StringSnow`, `Tears`, `10th Anniv.`) |
 | `Cb1100AuProtocol` | `CB1100AU` | USB HID (`0xCB`) | Dongle PEQ multi-filter CB1100AU lanjutan |
 | `KtProtocol` | `KT02H20`, `KT0231H` | USB HID | Dongle KTMicro KT02H20 (5-band) & KT0231H (6-band) |
 | `Kt1213Protocol` | `KT1213` | USB HID (`0x57`) | Perangkat DSP 15-band KTMicro KT1213 / MT2000 |
 | `Cx31993Protocol` | `CX31993` | USB HID | Dongle DSP 9-band Conexant CX31993 |
 | `Gm55Protocol` | `GM55` | USB HID (`0x02`) | Dongle DSP 10-band GM55 |
-| `FiioHidProtocol` | `FIIO_HID`, `FIIO_V2`, `FIIO_GIGAWIT` | USB HID | DAC USB FiiO / JadeAudio / Snowsky (`KA*`, `QX*`, `JA11`, `K11`/`K13 R2R`, `BTR*` USB, `BT11`/bridge GigaWit) |
+| `ComtrueEp0Protocol` | `COMTRUE_EP0` | USB Control EP0 (`0xC1`/`0xA5`) | Tanchjim `SPACE`, `LUNA`, `LUNA AT` |
+| `TanchjimBesMinoProtocol` | `BES_MINO` | Bluetooth BLE & SPP | Headset TWS Tanchjim `Mino` series |
+| `TanchjimBluetrumV1Protocol` / `V2Protocol` | `BLUETRUM_V1`, `BLUETRUM_V2` | Bluetooth BLE & SPP | Headset Tanchjim seri Bluetrum (`OLA 2`, `Origin AT`, `RITA`, `SOVO`, `Revo`, `EA Force`, dll.) |
+| `TtkInfoProtocol` | `TTGK_INFO` | USB HID (`0x0E`) | Kartu info chip read-only NICEHCK `NK1`, `NK1 Ultra`, `NK1 Max` |
+| `NicehckOriginProtocol` | `NICEHCK_ORIGIN_BT` | Bluetooth BLE & SPP | TWS NICEHCK `OriG in` |
+| `FiioHidProtocol` | `FIIO_HID`, `FIIO_V2`, `FIIO_GIGAWIT` | USB HID | DAC USB FiiO / JadeAudio / Snowsky (`KA*`, `QX*`, `JA11`, `K11`/`K13 R2R`, `BTR*` USB, `BT11`/Air Link GigaWit) |
 | `FiioRestmomentProtocol` | `FIIO_RESTMOMENT` | USB Serial / CDC (`0xFC`/`0xFA`) | Unit desktop FiiO (`K15`, `K17`, `K19`) |
-| `FiioBtProtocol` | `FIIO_BT_GAIA`, `FIIO_BT_UNIVERSAL`, `FIIO_BT_BR13` | Bluetooth SPP & BLE GATT | DAC/AMP nirkabel FiiO / Snowsky (`BTR*`, `BR13`, `Q5`, perangkat BT universal FiiO) |
+| `FiioBtProtocol` | `FIIO_BT_GAIA`, `FIIO_BT_UNIVERSAL`, `FIIO_BT_BR13` | Bluetooth SPP & BLE GATT | DAC/AMP nirkabel FiiO / Snowsky (`BTR*`, `BR13`, `Q5`, `UTWS*`, perangkat BT universal FiiO) |
+| `MoondropSpvProtocol` *(Eksperimental)* | `MOONDROP_SPV` | USB HID (`0x4B`) | Moondrop `Dawn Pro 2`, `FreeDSP Pro`/`Mini`, `ECHO-A`/`B`/`BP`, `May`, `Marigold`, `CDSP`, `Rays`, dll. (hingga 32-band PEQ) |
+| `MoondropFreeman3Protocol` / `ComtureProtocol` *(Eksperimental)* | `MOONDROP_FREEMAN3`, `MOONDROP_COMTURE` | USB HID / EP0 | Moondrop `Click`, `MoonRiver 2 Ti`/`3`, `Dawn Pro`/`3.5`/`4.4`, `DiscDream`, `Starlight`, `FreeDSP` |
+| `MoondropGaiaV3Protocol` *(Eksperimental)* | `QUALCOMM_GAIA_V3` | Bluetooth SPP & BLE GATT | Moondrop TWS/headset berbasis GAIA v3 (`Space Travel 1/2`, `Golden Ages 1/2`, `Robin`, `Moca`, `Block`, `Alice`, `Nekocake`, `Sparks`, `EVO 2`, `Pill`, dll.) |
+| `MoondropAirohaProtocol` / `JieliRcspProtocol` / `BleSourceProtocol` / `WmicProtocol` *(Eksperimental)* | `MOONDROP_AIROHA`, `MOONDROP_JIELI_RCSP`, `MOONDROP_BLE_SOURCE`, `MOONDROP_WMIC` | Bluetooth SPP & BLE GATT | Moondrop `Edge`/`Edge 2`, `Ultrasonic`, `Singer`, varian BLE Source (`9ECA0000-...`), dan `Wireless Mic` |
 
-> **Deteksi Otomatis USB OTG:** Filter vendor USB pada `usb_device_filter.xml` mengenali ID vendor umum (`0x3302`, `0x2972`, `0x5AC1`, `0x1024`, `0x31B2`, `0x0A12`, `0x0D8C`, dan lainnya), disertai deteksi cadangan generik untuk perangkat USB Audio + HID/CDC.
+> **Catatan Dukungan Moondrop:** Driver Moondrop USB & Bluetooth di v2.0 bersifat **eksperimental** (diturunkan dari analisis protokol resmi tanpa pengujian pada perangkat keras fisik saat rilis).
+>
+> **Deteksi Otomatis USB OTG:** Filter vendor USB pada `usb_device_filter.xml` mengenali ID vendor umum (`0x3302`, `0x2972`, `0x35D8`, `0x0666`, `0x0572`, `0x5AC1`, `0x1024`, `0x31B2`, `0x0A12`, `0x0D8C`, dan lainnya), disertai deteksi cadangan generik untuk perangkat USB Audio + HID/CDC.
 
 ---
 
@@ -99,7 +111,7 @@ dongleCTRL
 │       ├── HidReportDescriptorParser.kt
 │       ├── ProtocolRegistry.kt
 │       ├── Transport.kt             # Abstraksi DacTransport (USB HID, Serial, BT SPP, BLE GATT)
-│       └── drivers/                 # Codec protokol & driver perangkat keras (CB, KT, CX, GM55, FiiO)
+│       └── drivers/                 # Codec protokol & driver perangkat keras (CB, KT, CX, GM55, FiiO, Tanchjim, NICEHCK, Moondrop)
 │
 └── app/                    # Aplikasi Android (Jetpack Compose Material 3)
     └── src/main/
@@ -119,7 +131,7 @@ dongleCTRL
 ## Teknologi & Persyaratan
 
 - **Application ID / Namespace:** `com.suprcharg3d.dongleCTRL`
-- **Versi:** `1.1.1` (`versionCode = 4`)
+- **Versi:** `2.0` (`versionCode = 5`)
 - **SDK Minimum:** Android 8.0 (API 26)
 - **Target / Compile SDK:** Android 16 (API 36)
 - **Bahasa & Build:** Kotlin `2.2.10`, Android Gradle Plugin `9.1.1`, toolchain Java 17
@@ -173,5 +185,5 @@ Sebuah pengujian instrumentasi ([`LiveBtr17BluetoothTest.kt`](app/src/androidTes
 > Perangkat lunak ini berkomunikasi langsung dengan perangkat keras audio eksternal melalui protokol tingkat rendah USB HID, USB Serial, dan Bluetooth, serta menulis register konfigurasi DSP/EQ dan memori flash perangkat. **Dengan menggunakan dongleCTRL, Anda menanggung sepenuhnya segala risiko.** Penulis dan kontributor **tidak bertanggung jawab atas segala kerusakan perangkat keras, perangkat yang mati total (brick), kerusakan firmware/flash, gangguan pendengaran, maupun kerusakan speaker/IEM** yang timbul akibat penggunaan atau penyalahgunaan aplikasi ini.
 
 - Dukungan protokol diimplementasikan melalui analisis clean-room dan pengujian pada berbagai keluarga DAC yang didukung. Perilaku firmware pabrikan dapat berbeda antarmodel dan revisi firmware; selalu periksa kembali batas gain, headroom preamp, serta slot EQ kustom yang dipilih sebelum menyimpan ke flash atau memutar audio pada volume tinggi dengan IEM yang sensitif.
-- Aplikasi ini tidak berafiliasi dengan, tidak didukung oleh, dan tidak disahkan oleh EPZ, WalkPlay, FiiO, JadeAudio, Snowsky, KTMicro, Conexant, maupun produsen lainnya. Seluruh nama produk dan merek dagang adalah milik masing-masing pemiliknya.
+- Aplikasi ini tidak berafiliasi dengan, tidak didukung oleh, dan tidak disahkan oleh EPZ, WalkPlay, FiiO, JadeAudio, Snowsky, Tanchjim, NICEHCK, Moondrop, KTMicro, Conexant, maupun produsen lainnya. Seluruh nama produk dan merek dagang adalah milik masing-masing pemiliknya.
 - File APK siap pasang tersedia di halaman [GitHub Releases](https://github.com/suprcharg3d/dongleCTRL/releases).

@@ -1578,6 +1578,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(prefs = it.prefs.copy(autoApplyEq = enabled)) }
     }
 
+    fun setAutoOpenOnUsb(enabled: Boolean) {
+        prefsStore.setAutoOpenOnUsb(enabled)
+        app.applyUsbAutoOpenSetting(enabled)
+        _uiState.update { it.copy(prefs = it.prefs.copy(autoOpenOnUsb = enabled)) }
+    }
+
     fun setMuteOnWrite(enabled: Boolean) {
         prefsStore.setMuteOnWrite(enabled)
         _uiState.update { it.copy(prefs = it.prefs.copy(muteOnWrite = enabled)) }

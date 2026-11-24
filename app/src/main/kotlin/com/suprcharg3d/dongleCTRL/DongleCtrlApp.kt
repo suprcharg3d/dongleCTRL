@@ -1,6 +1,8 @@
 package com.suprcharg3d.dongleCTRL
 
 import android.app.Application
+import android.content.ComponentName
+import android.content.pm.PackageManager
 import com.suprcharg3d.dongleCTRL.bt.BluetoothDacMonitor
 import com.suprcharg3d.dongleCTRL.data.OfflinePrefsStore
 import com.suprcharg3d.dongleCTRL.data.OfflinePresetStore
@@ -38,5 +40,28 @@ class DongleCtrlApp : Application() {
 
     val btMonitor: BluetoothDacMonitor by lazy {
         BluetoothDacMonitor(this, catalog, logSink = usbMonitor::log)
+    }
+
+    override fun onCreate() {
+        super.onCreate()
+        applyUsbAutoOpenSetting(prefsStore.load().autoOpenOnUsb)
+    }
+
+    fun applyUsbAutoOpenSetting(enabled: Boolean) {
+        val component = ComponentName(this, "$packageName.UsbAttachAlias")
+        val targetState = if (enabled) {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        } else {
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        }
+        runCatching {
+            if (packageManager.getComponentEnabledSetting(component) != targetState) {
+                packageManager.setComponentEnabledSetting(
+                    component,
+                    targetState,
+                    PackageManager.DONT_KILL_APP
+                )
+            }
+        }
     }
 }

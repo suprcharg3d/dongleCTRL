@@ -11,6 +11,7 @@ enum class ThemeMode(val label: String) {
 
 data class AppPrefs(
     val autoApplyEq: Boolean = true,
+    val autoOpenOnUsb: Boolean = false,
     val muteOnWrite: Boolean = false,
     val themeMode: ThemeMode = ThemeMode.DARK
 )
@@ -21,6 +22,7 @@ class OfflinePrefsStore(context: Context) {
 
     fun load(): AppPrefs = AppPrefs(
         autoApplyEq = prefs.getBoolean(KEY_AUTO_APPLY, true),
+        autoOpenOnUsb = prefs.getBoolean(KEY_AUTO_OPEN_USB, false),
         muteOnWrite = prefs.getBoolean(KEY_MUTE_ON_WRITE, false),
         themeMode = ThemeMode.entries.firstOrNull {
             it.name == prefs.getString(KEY_THEME, ThemeMode.DARK.name)
@@ -29,6 +31,10 @@ class OfflinePrefsStore(context: Context) {
 
     fun setAutoApplyEq(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_AUTO_APPLY, enabled).apply()
+    }
+
+    fun setAutoOpenOnUsb(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AUTO_OPEN_USB, enabled).apply()
     }
 
     fun setMuteOnWrite(enabled: Boolean) {
@@ -56,6 +62,7 @@ class OfflinePrefsStore(context: Context) {
 
     companion object {
         private const val KEY_AUTO_APPLY = "auto_apply_eq"
+        private const val KEY_AUTO_OPEN_USB = "auto_open_on_usb"
         private const val KEY_MUTE_ON_WRITE = "mute_on_write"
         private const val KEY_THEME = "theme_mode"
     }
