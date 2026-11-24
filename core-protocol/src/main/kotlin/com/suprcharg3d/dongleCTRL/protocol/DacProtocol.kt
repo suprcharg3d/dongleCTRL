@@ -12,6 +12,13 @@ interface DacProtocol {
 
     fun buildCapabilities(profile: DacProfile): DacCapabilities
 
+    /**
+     * Optional post-sync capability refinement based on runtime device probes stored in [state]
+     * (e.g. discovering optional CB 0x4B registers such as hardware volume, DRE, or DAC LED).
+     */
+    fun resolveCapabilities(profile: DacProfile, state: DacDeviceState): DacCapabilities =
+        buildCapabilities(profile)
+
     suspend fun readDeviceState(transport: DacTransport, profile: DacProfile): DacDeviceState
 
     suspend fun writeEqBand(

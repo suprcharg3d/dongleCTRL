@@ -19,7 +19,31 @@ enum class ProtocolFamily(val displayName: String) {
     FIIO_RESTMOMENT("FiiO Desktop Serial (0xFC/0xFA)"),
     FIIO_BT_GAIA("FiiO Bluetooth GAIA"),
     FIIO_BT_UNIVERSAL("FiiO Bluetooth Universal"),
-    FIIO_BT_BR13("FiiO Bluetooth RCSP");
+    FIIO_BT_BR13("FiiO Bluetooth RCSP"),
+    COMTRUE_EP0("ComTrue EP0 (0xC1/0xA5)"),
+    BES_MINO("BES Mino BT (11 00 00)"),
+    BLUETRUM_V1("Bluetrum v1 BT (FF 04)"),
+    BLUETRUM_V2("Bluetrum v2 BT (FF A1)"),
+    TTGK_INFO("TTGK Chip Info (0x0E)"),
+    NICEHCK_ORIGIN_BT("NICEHCK OriG in BT"),
+    MOONDROP_SPV("Moondrop SPV (0x4B)"),
+    MOONDROP_COMTURE("Moondrop ComTrue EP0 (0xC0/0xA5)"),
+    MOONDROP_FREEMAN3("Moondrop Freeman3 (CAF)"),
+    MOONDROP_BLE_SOURCE("Moondrop BLE Source (0xA5)"),
+    MOONDROP_AIROHA("Moondrop Airoha Race"),
+    MOONDROP_JIELI_RCSP("Moondrop Jieli RCSP"),
+    MOONDROP_WMIC("Moondrop Wireless Mic"),
+    QUALCOMM_GAIA_V3("Qualcomm GAIA v3");
+
+    val usesEp0Control: Boolean
+        get() = this in setOf(
+            FIIO_HID,
+            FIIO_V2,
+            FIIO_GIGAWIT,
+            COMTRUE_EP0,
+            MOONDROP_SPV,
+            MOONDROP_COMTURE
+        )
 
     companion object {
         fun fromWireName(name: String): ProtocolFamily = when (name.uppercase()) {
@@ -38,9 +62,29 @@ enum class ProtocolFamily(val displayName: String) {
             "FIIO_BT_GAIA" -> FIIO_BT_GAIA
             "FIIO_BT_UNIVERSAL" -> FIIO_BT_UNIVERSAL
             "FIIO_BT_BR13" -> FIIO_BT_BR13
+            "COMTRUE_EP0" -> COMTRUE_EP0
+            "BES_MINO" -> BES_MINO
+            "BLUETRUM_V1" -> BLUETRUM_V1
+            "BLUETRUM_V2" -> BLUETRUM_V2
+            "TTGK_INFO" -> TTGK_INFO
+            "NICEHCK_ORIGIN_BT" -> NICEHCK_ORIGIN_BT
+            "MOONDROP_SPV" -> MOONDROP_SPV
+            "MOONDROP_COMTURE" -> MOONDROP_COMTURE
+            "MOONDROP_FREEMAN3" -> MOONDROP_FREEMAN3
+            "MOONDROP_BLE_SOURCE" -> MOONDROP_BLE_SOURCE
+            "MOONDROP_AIROHA" -> MOONDROP_AIROHA
+            "MOONDROP_JIELI_RCSP" -> MOONDROP_JIELI_RCSP
+            "MOONDROP_WMIC" -> MOONDROP_WMIC
+            "QUALCOMM_GAIA_V3" -> QUALCOMM_GAIA_V3
             else -> CB
         }
     }
+}
+
+enum class BalanceEncoding {
+    AUTO,
+    WALKPLAY_BE_MAP,
+    Q8_8_LE_AT_5
 }
 
 data class NamedOption(
@@ -119,7 +163,12 @@ data class DacProfile(
     val supportsMic: Boolean = false,
     val supportsDacFilter: Boolean = false,
     val fiioDeviceType: Int? = null,
-    val source: String = "catalog"
+    val source: String = "catalog",
+    val compensate2X: Boolean? = null,
+    val nonBlockingWrite: Boolean = false,
+    val isHeadset: Boolean = false,
+    val balanceEncoding: BalanceEncoding = BalanceEncoding.AUTO,
+    val btSppUuid: String? = null
 )
 
 data class DacCapabilities(

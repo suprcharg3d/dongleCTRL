@@ -34,6 +34,9 @@ class AndroidUsbHidTransport private constructor(
     @Volatile
     private var open = true
 
+    @Volatile
+    private var lastSentReportId: Int = 0
+
     override val isConnected: Boolean
         get() = open
 
@@ -42,6 +45,7 @@ class AndroidUsbHidTransport private constructor(
         return withContext(Dispatchers.IO) {
             val out = outEndpoint
             val rid = resolveWireReportId(data)
+            lastSentReportId = rid
             val descriptorSize = descriptor.hidOutputReportSizes[rid]
                 ?: if (descriptor.hidOutputReportSizes.size == 1) descriptor.hidOutputReportSizes.values.firstOrNull() else null
             val targetSize = when {
@@ -79,11 +83,28 @@ class AndroidUsbHidTransport private constructor(
 
     override suspend fun receive(expectedSize: Int, timeoutMs: Int): ByteArray? = ioMutex.withLock {
         if (!open) return null
-        val ep = inEndpoint ?: return null
+        val ep = inEndpoint
+        val intf = usbInterface
         return withContext(Dispatchers.IO) {
-            val bufSize = expectedSize.coerceAtLeast(ep.maxPacketSize.coerceAtLeast(64))
+            val bufSize = expectedSize.coerceAtLeast(ep?.maxPacketSize ?: descriptor.hidReportSize).coerceAtLeast(64)
             val buf = ByteArray(bufSize)
-            val count = connection.bulkTransfer(ep, buf, buf.size, timeoutMs)
+            val count = if (ep != null) {
+                connection.bulkTransfer(ep, buf, buf.size, timeoutMs)
+            } else if (intf != null) {
+                // HID Control fallback when Interrupt IN endpoint is absent (EP0 GET_REPORT)
+                val rid = lastSentReportId.coerceIn(0, 0xFF)
+                connection.controlTransfer(
+                    0xA1,
+                    0x01,
+                    (0x01 shl 8) or rid,
+                    intf.id,
+                    buf,
+                    buf.size,
+                    timeoutMs
+                )
+            } else {
+                -1
+            }
             if (count > 0) {
                 val sliced = buf.copyOf(count)
                 logSink("RX[$count]: ${sliced.take(12).joinToString(" ") { "%02X".format(it) }}")
@@ -130,14 +151,15 @@ class AndroidUsbHidTransport private constructor(
             device: UsbDevice,
             descriptor: UsbDeviceDescriptor,
             allowControlOnly: Boolean = false,
+            preferControlOnly: Boolean = false,
             logSink: (String) -> Unit
         ): AndroidUsbHidTransport? {
             val hidInterfaces = (0 until device.interfaceCount)
                 .map { device.getInterface(it) }
                 .filter { it.interfaceClass == UsbConstants.USB_CLASS_HID }
 
-            if (hidInterfaces.isEmpty()) {
-                if (!allowControlOnly) {
+            if (preferControlOnly || hidInterfaces.isEmpty()) {
+                if (!preferControlOnly && !allowControlOnly) {
                     logSink("No USB HID interface found on ${device.productName ?: device.deviceName}")
                     return null
                 }

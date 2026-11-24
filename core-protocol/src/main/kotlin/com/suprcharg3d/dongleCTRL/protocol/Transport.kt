@@ -24,7 +24,8 @@ data class UsbDeviceDescriptor(
     val acInterfaceIndex: Int = 0,
     val hidInterfaceIndex: Int = 0,
     val bluetoothAddress: String? = null,
-    val btConnectMode: Int? = null
+    val btConnectMode: Int? = null,
+    val btServiceUuids: List<String> = emptyList()
 )
 
 /**

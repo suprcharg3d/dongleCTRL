@@ -2,6 +2,7 @@ package com.suprcharg3d.dongleCTRL.protocol
 
 import com.suprcharg3d.dongleCTRL.protocol.drivers.Cb1100AuProtocol
 import com.suprcharg3d.dongleCTRL.protocol.drivers.CbProtocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.ComtrueEp0Protocol
 import com.suprcharg3d.dongleCTRL.protocol.drivers.Cx31993Protocol
 import com.suprcharg3d.dongleCTRL.protocol.drivers.FiioBtProtocol
 import com.suprcharg3d.dongleCTRL.protocol.drivers.FiioHidProtocol
@@ -9,6 +10,19 @@ import com.suprcharg3d.dongleCTRL.protocol.drivers.FiioRestmomentProtocol
 import com.suprcharg3d.dongleCTRL.protocol.drivers.Gm55Protocol
 import com.suprcharg3d.dongleCTRL.protocol.drivers.Kt1213Protocol
 import com.suprcharg3d.dongleCTRL.protocol.drivers.KtProtocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.MoondropAirohaProtocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.MoondropBleSourceProtocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.MoondropComtureProtocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.MoondropFreeman3Protocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.MoondropGaiaV3Protocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.MoondropJieliRcspProtocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.MoondropSpvProtocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.MoondropWmicProtocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.NicehckOriginProtocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.TanchjimBesMinoProtocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.TanchjimBluetrumV1Protocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.TanchjimBluetrumV2Protocol
+import com.suprcharg3d.dongleCTRL.protocol.drivers.TtkInfoProtocol
 
 /**
  * Central registry mapping every [ProtocolFamily] to its template [DacProtocol] driver.
@@ -38,7 +52,21 @@ object ProtocolRegistry {
         ProtocolFamily.FIIO_RESTMOMENT to { FiioRestmomentProtocol() },
         ProtocolFamily.FIIO_BT_GAIA to { FiioBtProtocol(ProtocolFamily.FIIO_BT_GAIA, sharedFiioSchemas) },
         ProtocolFamily.FIIO_BT_UNIVERSAL to { FiioBtProtocol(ProtocolFamily.FIIO_BT_UNIVERSAL, sharedFiioSchemas) },
-        ProtocolFamily.FIIO_BT_BR13 to { FiioBtProtocol(ProtocolFamily.FIIO_BT_BR13, sharedFiioSchemas) }
+        ProtocolFamily.FIIO_BT_BR13 to { FiioBtProtocol(ProtocolFamily.FIIO_BT_BR13, sharedFiioSchemas) },
+        ProtocolFamily.COMTRUE_EP0 to { ComtrueEp0Protocol() },
+        ProtocolFamily.BES_MINO to { TanchjimBesMinoProtocol() },
+        ProtocolFamily.BLUETRUM_V1 to { TanchjimBluetrumV1Protocol() },
+        ProtocolFamily.BLUETRUM_V2 to { TanchjimBluetrumV2Protocol() },
+        ProtocolFamily.TTGK_INFO to { TtkInfoProtocol() },
+        ProtocolFamily.NICEHCK_ORIGIN_BT to { NicehckOriginProtocol() },
+        ProtocolFamily.MOONDROP_SPV to { MoondropSpvProtocol() },
+        ProtocolFamily.MOONDROP_COMTURE to { MoondropComtureProtocol() },
+        ProtocolFamily.MOONDROP_FREEMAN3 to { MoondropFreeman3Protocol() },
+        ProtocolFamily.MOONDROP_BLE_SOURCE to { MoondropBleSourceProtocol() },
+        ProtocolFamily.MOONDROP_AIROHA to { MoondropAirohaProtocol() },
+        ProtocolFamily.MOONDROP_JIELI_RCSP to { MoondropJieliRcspProtocol() },
+        ProtocolFamily.MOONDROP_WMIC to { MoondropWmicProtocol() },
+        ProtocolFamily.QUALCOMM_GAIA_V3 to { MoondropGaiaV3Protocol() }
     )
 
     fun create(family: ProtocolFamily, fiioSchemas: FiioSchemaCatalog? = sharedFiioSchemas): DacProtocol {
