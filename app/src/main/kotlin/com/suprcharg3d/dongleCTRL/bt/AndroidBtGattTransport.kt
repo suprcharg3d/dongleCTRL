@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import android.os.Build
 import com.suprcharg3d.dongleCTRL.protocol.DacTransport
@@ -84,7 +85,7 @@ class AndroidBtGattTransport private constructor(
         }
 
         val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            gatt.writeCharacteristic(writeChar, data, writeType) == BluetoothGatt.GATT_SUCCESS
+            gatt.writeCharacteristic(writeChar, data, writeType) == BluetoothStatusCodes.SUCCESS
         } else {
             @Suppress("DEPRECATION")
             run {
