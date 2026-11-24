@@ -21,4 +21,5 @@
     <usb-device vendor-id="13502" /> <!-- 0x34BE -->
     <usb-device vendor-id="13991" /> <!-- 0x36A7 -->
     <usb-device vendor-id="14139" /> <!-- 0x373B -->
+    <usb-device vendor-id="1394" />  <!-- 0x0572 Conexant / Moondrop Freeman3 -->
 </resources>

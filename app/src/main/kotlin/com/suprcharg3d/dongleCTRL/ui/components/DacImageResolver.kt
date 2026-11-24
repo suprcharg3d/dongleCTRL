@@ -74,6 +74,9 @@ internal object DacImageResolver {
             profile.brand.equals("JadeAudio", ignoreCase = true) ||
             profile.brand.equals("SNOWSKY", ignoreCase = true) ||
             profile.brand.equals("EPZ", ignoreCase = true) ||
+            profile.brand.equals("TANCHJIM", ignoreCase = true) ||
+            profile.brand.equals("NICEHCK", ignoreCase = true) ||
+            profile.brand.equals("MOONDROP", ignoreCase = true) ||
             (profile.brand.equals("TRN", ignoreCase = true) && profile.model.contains("Black Pearl", ignoreCase = true))
         if (!allowModelFallback) return null
 
@@ -106,7 +109,12 @@ internal object DacImageResolver {
     }
 
     private const val EXCLUDED_EPZ_H10_VID_PID = "5ac1_1111"
-    private val ALLOWED_MODEL_SOURCES = setOf("fiio", "fiio_bt", "epz")
-    private val BRAND_PREFIXES = listOf("fiio ", "jadeaudio ", "snowsky ")
+    private val ALLOWED_MODEL_SOURCES = setOf("fiio", "fiio_bt", "epz", "tanchjim", "nicehck", "moondrop")
+    private val BRAND_PREFIXES = listOf(
+        "fiio ", "jadeaudio ", "snowsky ",
+        "tanchjim-", "tanchjim ",
+        "nicehck-", "nicehck ",
+        "moondrop-", "moondrop "
+    )
     private val NON_ALNUM_REGEX = Regex("[^a-z0-9]+")
 }

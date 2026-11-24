@@ -198,102 +198,106 @@ fun DeviceDashboardScreen(
         }
 
         // --- SOUND SETTINGS ---
-        SettingsSectionCard(title = "Sound Settings") {
-            if (caps.hasEqSwitch) {
-                SettingSwitchRow(
-                    icon = Icons.Rounded.GraphicEq,
-                    title = "Hardware EQ",
-                    subtitle = when {
-                        !st.eqEnabled -> "Hardware EQ off"
-                        caps.bypassPresetId != null && st.activePresetId == caps.bypassPresetId ->
-                            "Bypass preset active"
-                        else -> "Parametric DSP active"
-                    },
-                    checked = st.eqEnabled,
-                    onCheckedChange = viewModel::setEqEnabled
-                )
-            }
-
-            val activePresets = caps.activePresetsForUac(st.uacMode)
-            if (activePresets.isNotEmpty()) {
-                val resolvedPresets = activePresets.map { p ->
-                    val custom = st.customPresetNames[p.id]
-                    if (!custom.isNullOrBlank()) p.copy(label = custom) else p
-                }
-                val activeLabel = resolvedPresets.firstOrNull { it.id == st.activePresetId }?.label
-                    ?: "Slot ${st.activePresetId}"
-                SettingActionRow(
-                    icon = Icons.Rounded.Tune,
-                    title = "Hardware Preset",
-                    valueText = activeLabel,
-                    onClick = {
-                        pickerTitle = "Select Hardware Preset"
-                        pickerOptions = resolvedPresets
-                        pickerSelected = st.activePresetId
-                        isPresetPicker = true
-                        pickerOnSelect = { viewModel.selectHardwarePreset(it.id) }
-                    }
-                )
-            }
-
-            // Equalizer card with live mini curve preview
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onOpenEqualizer)
-                    .padding(horizontal = 16.dp, vertical = 14.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.GraphicEq,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(21.dp)
+        val activePresets = caps.activePresetsForUac(st.uacMode)
+        if (caps.hasEqSwitch || activePresets.isNotEmpty() || caps.maxBands > 0) {
+            SettingsSectionCard(title = "Sound Settings") {
+                if (caps.hasEqSwitch) {
+                    SettingSwitchRow(
+                        icon = Icons.Rounded.GraphicEq,
+                        title = "Hardware EQ",
+                        subtitle = when {
+                            !st.eqEnabled -> "Hardware EQ off"
+                            caps.bypassPresetId != null && st.activePresetId == caps.bypassPresetId ->
+                                "Bypass preset active"
+                            else -> "Parametric DSP active"
+                        },
+                        checked = st.eqEnabled,
+                        onCheckedChange = viewModel::setEqEnabled
                     )
-                    Spacer(modifier = Modifier.width(14.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Parametric Equalizer",
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        val preampRounded = (st.globalGainDb * 10.0).roundToInt() / 10.0
-                        val peqSubtitle = if (caps.hasGlobalGain && preampRounded != 0.0) {
-                            "${st.bands.size} bands · ${caps.sampleRate / 1000} kHz DSP · Preamp ${if (preampRounded > 0) "+" else ""}$preampRounded dB"
-                        } else {
-                            "${st.bands.size} bands · ${caps.sampleRate / 1000} kHz DSP · Tap to tune"
-                        }
-                        Text(
-                            text = peqSubtitle,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                }
+
+                if (activePresets.isNotEmpty()) {
+                    val resolvedPresets = activePresets.map { p ->
+                        val custom = st.customPresetNames[p.id]
+                        if (!custom.isNullOrBlank()) p.copy(label = custom) else p
                     }
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(10.dp)
+                    val activeLabel = resolvedPresets.firstOrNull { it.id == st.activePresetId }?.label
+                        ?: "Slot ${st.activePresetId}"
+                    SettingActionRow(
+                        icon = Icons.Rounded.Tune,
+                        title = "Hardware Preset",
+                        valueText = activeLabel,
+                        onClick = {
+                            pickerTitle = "Select Hardware Preset"
+                            pickerOptions = resolvedPresets
+                            pickerSelected = st.activePresetId
+                            isPresetPicker = true
+                            pickerOnSelect = { viewModel.selectHardwarePreset(it.id) }
+                        }
+                    )
+                }
+
+                if (caps.maxBands > 0) {
+                    // Equalizer card with live mini curve preview
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable(onClick = onOpenEqualizer)
+                            .padding(horizontal = 16.dp, vertical = 14.dp)
                     ) {
-                        Text(
-                            text = "Edit PEQ",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.GraphicEq,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(21.dp)
+                            )
+                            Spacer(modifier = Modifier.width(14.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Parametric Equalizer",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                val preampRounded = (st.globalGainDb * 10.0).roundToInt() / 10.0
+                                val peqSubtitle = if (caps.hasGlobalGain && preampRounded != 0.0) {
+                                    "${st.bands.size} bands · ${caps.sampleRate / 1000} kHz DSP · Preamp ${if (preampRounded > 0) "+" else ""}$preampRounded dB"
+                                } else {
+                                    "${st.bands.size} bands · ${caps.sampleRate / 1000} kHz DSP · Tap to tune"
+                                }
+                                Text(
+                                    text = peqSubtitle,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Surface(
+                                color = MaterialTheme.colorScheme.primaryContainer,
+                                shape = RoundedCornerShape(10.dp)
+                            ) {
+                                Text(
+                                    text = "Edit PEQ",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        InteractivePeqGraph(
+                            bands = st.bands,
+                            selectedBandIndex = 0,
+                            globalGainDb = st.globalGainDb,
+                            sampleRate = caps.sampleRate,
+                            minGainDb = caps.minGainDb,
+                            maxGainDb = caps.maxGainDb,
+                            interactive = false
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(10.dp))
-                InteractivePeqGraph(
-                    bands = st.bands,
-                    selectedBandIndex = 0,
-                    globalGainDb = st.globalGainDb,
-                    sampleRate = caps.sampleRate,
-                    minGainDb = caps.minGainDb,
-                    maxGainDb = caps.maxGainDb,
-                    interactive = false
-                )
             }
         }
 

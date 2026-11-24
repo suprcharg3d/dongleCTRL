@@ -401,11 +401,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             val cur = state.activeSession ?: return@update state
             if (cur.deviceKey != entry.descriptor.deviceKey) return@update state
-            val finalBands = if (synced.bands.isEmpty()) DefaultBands.flatBands(caps.maxBands) else synced.bands
+            val resolvedCaps = driver.resolveCapabilities(runtimeProfile, synced)
+            val finalBands = if (synced.bands.isEmpty()) DefaultBands.flatBands(resolvedCaps.maxBands) else synced.bands
             state.copy(
                 activeSession = cur.copy(
                     profile = runtimeProfile,
-                    capabilities = caps.copy(maxBands = finalBands.size.coerceAtLeast(caps.maxBands)),
+                    capabilities = resolvedCaps.copy(maxBands = finalBands.size.coerceAtLeast(resolvedCaps.maxBands)),
                     state = synced.copy(bands = finalBands),
                     isBusy = false,
                     statusBanner = banner
@@ -487,10 +488,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { state ->
             val cur = state.activeSession ?: return@update state
             if (cur.deviceKey != entry.device.deviceName) return@update state
-            val finalBands = if (synced.bands.isEmpty()) DefaultBands.flatBands(caps.maxBands) else synced.bands
+            val resolvedCaps = driver.resolveCapabilities(profile, synced)
+            val finalBands = if (synced.bands.isEmpty()) DefaultBands.flatBands(resolvedCaps.maxBands) else synced.bands
             state.copy(
                 activeSession = cur.copy(
-                    capabilities = caps.copy(maxBands = finalBands.size.coerceAtLeast(caps.maxBands)),
+                    capabilities = resolvedCaps.copy(maxBands = finalBands.size.coerceAtLeast(resolvedCaps.maxBands)),
                     state = synced.copy(bands = finalBands),
                     isBusy = false,
                     statusBanner = banner
@@ -1445,17 +1447,23 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             debounceKey = debounce
         ) { tx, profile, driver ->
             val ok = driver.setExtraControl(tx, profile, key, value)
-            if (ok && key == "vol_control") {
+            if (ok && (key == "vol_control" || key == "cb_probe_diag" || ctrlKind == com.suprcharg3d.dongleCTRL.protocol.ControlKind.ACTION)) {
                 delay(220)
                 val baseState = _uiState.value.activeSession?.state
-                val refreshed = if (baseState != null) {
+                val refreshed = if (key.endsWith("_reset") || key.endsWith("_reset_all")) {
+                    runCatching { driver.readDeviceState(tx, profile) }.getOrNull()
+                } else if (baseState != null) {
                     runCatching { driver.refreshLiveTelemetry(tx, profile, baseState, includeAllControls = true) }.getOrNull()
                 } else null
                 if (refreshed != null) {
+                    if (key == "cb_probe_diag" && refreshed.diagnosticNote != null) {
+                        usbMonitor.log(refreshed.diagnosticNote!!)
+                    }
                     _uiState.update { ui ->
                         val cur = ui.activeSession ?: return@update ui
                         if (cur.deviceKey != session.deviceKey) return@update ui
-                        ui.copy(activeSession = cur.copy(state = refreshed))
+                        val nextCaps = driver.resolveCapabilities(cur.profile, refreshed)
+                        ui.copy(activeSession = cur.copy(capabilities = nextCaps, state = refreshed))
                     }
                 }
             }
@@ -1568,6 +1576,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setAutoApplyEq(enabled: Boolean) {
         prefsStore.setAutoApplyEq(enabled)
         _uiState.update { it.copy(prefs = it.prefs.copy(autoApplyEq = enabled)) }
+    }
+
+    fun setAutoOpenOnUsb(enabled: Boolean) {
+        prefsStore.setAutoOpenOnUsb(enabled)
+        app.applyUsbAutoOpenSetting(enabled)
+        _uiState.update { it.copy(prefs = it.prefs.copy(autoOpenOnUsb = enabled)) }
     }
 
     fun setMuteOnWrite(enabled: Boolean) {

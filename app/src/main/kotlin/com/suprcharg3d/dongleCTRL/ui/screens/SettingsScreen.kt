@@ -26,6 +26,7 @@ import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.Memory
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Terminal
+import androidx.compose.material.icons.rounded.Usb
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -62,6 +63,7 @@ fun SettingsScreen(
     usbLogs: List<String>,
     onThemeModeChange: (ThemeMode) -> Unit,
     onAutoApplyChange: (Boolean) -> Unit,
+    onAutoOpenUsbChange: (Boolean) -> Unit,
     onClearLogs: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -91,8 +93,15 @@ fun SettingsScreen(
                 icon = Icons.Rounded.AutoMode,
                 title = "Instant Live PEQ Sync",
                 checked = prefs.autoApplyEq,
-                showDivider = false,
                 onCheckedChange = onAutoApplyChange
+            )
+            SettingSwitchRow(
+                icon = Icons.Rounded.Usb,
+                title = "Auto-Open on USB Connect",
+                subtitle = "Launch app when a USB DAC is plugged in",
+                checked = prefs.autoOpenOnUsb,
+                showDivider = false,
+                onCheckedChange = onAutoOpenUsbChange
             )
         }
 
@@ -102,7 +111,7 @@ fun SettingsScreen(
             SettingActionRow(
                 icon = Icons.Rounded.Memory,
                 title = "Supported DAC Catalog",
-                subtitle = "EPZ · WalkPlay · FiiO",
+                subtitle = "FiiO - EPZ - Tanchjim - NICEHCK - Moondrop",
                 valueText = "${catalogProfiles.size}",
                 onClick = { showCatalogDialog = true }
             )
@@ -116,7 +125,7 @@ fun SettingsScreen(
             SettingActionRow(
                 icon = Icons.Rounded.Info,
                 title = "About dongleCTRL",
-                valueText = "v1.1.1",
+                valueText = "v2.0",
                 showDivider = false,
                 onClick = { showAboutDialog = true }
             )
@@ -258,20 +267,22 @@ fun SettingsScreen(
     if (showAboutDialog) {
         AlertDialog(
             onDismissRequest = { showAboutDialog = false },
-            title = { Text("dongleCTRL") },
+            title = { Text("dongleCTRL v2.0") },
             text = {
                 Text(
-                    "Multi-protocol USB & Bluetooth DAC/AMP controller and Parametric EQ (PEQ) suite.\n\n" +
+                    "Multi-protocol USB & Bluetooth DAC/AMP controller and Parametric EQ (PEQ) suite across 29 protocol families.\n\n" +
                         "Transports:\n" +
-                        "• USB HID, USB Serial (CDC) & Bluetooth (SPP / BLE GATT)\n\n" +
-                        "Supported engines & chipsets:\n" +
+                        "• USB HID, USB Serial (CDC) & Bluetooth (Classic SPP / BLE GATT)\n\n" +
+                        "Supported engines & brands:\n" +
                         "• EPZ / WalkPlay / CB (0x4B) & CB1100AU (0xCB)\n" +
-                        "• KTMicro KT02H20, KT0231H & KT1213 (0x57)\n" +
-                        "• Conexant CX31993 & GM55\n" +
-                        "• FiiO USB HID (V1/V2 & GigaWit bridge), Desktop Serial (K15/K17/K19) & Bluetooth (GAIA V1/V3, Universal, BR13, Q5)\n\n" +
+                        "• KTMicro KT02H20, KT0231H & KT1213 (0x57), Conexant CX31993 & GM55\n" +
+                        "• FiiO / JadeAudio / Snowsky USB (HID V1/V2, GigaWit), Desktop Serial (K15/K17/K19) & BT (GAIA, Universal, BR13, Q5)\n" +
+                        "• Tanchjim USB (CB 0x4B, ComTrue EP0) & BT (BES Mino, Bluetrum v1/v2)\n" +
+                        "• NICEHCK USB (TTGK CB/Info) & OriG in BT\n" +
+                        "• Moondrop [Experimental] USB (SPV, Freeman3, ComTrue) & BT (GAIA v3, Airoha, Jieli RCSP, BLE Source, WMic)\n\n" +
                         "Features:\n" +
                         "• Interactive PEQ, AutoEQ import/export & 10-band presets\n" +
-                        "• Hardware controls (Gain, DAC Filter, Balance, Volume, Scene, RGB)\n\n" +
+                        "• Schema/capability-driven controls (Gain, Filters, Balance ±12/±50, Volume, LED, ANC, Touch, Themes & optional USB Auto-Open)\n\n" +
                         "Disclaimer:\n" +
                         "• Provided AS-IS without warranty. You use this app at your own risk; the authors are not responsible for any DAC bricking, corrupted flash/firmware, IEM damage, or hearing injury.",
                     style = MaterialTheme.typography.bodyMedium

@@ -46,8 +46,8 @@ class KtProtocol(
         hasGlobalGain = true,
         globalGainRange = -18.0..3.0,
         hasDacFilter = false,
-        hasMicGain = !isSixBand,
-        micGainRange = -6..44,
+        hasMicGain = !isSixBand && profile.schemeNo != SCHEME_TANCHJIM_NOMIC,
+        micGainRange = if (isTanchjimDsp(profile)) -15..15 else -6..44,
         supportsRamRefresh = true,
         supportsFlashSave = true
     )
@@ -67,13 +67,22 @@ class KtProtocol(
             else CHIP_DAC_DB.getOrNull(raw.coerceIn(1, CHIP_DAC_DB.lastIndex)) ?: 0.0
         } else 0.0
 
-        val micGainDb = if (!isS19) {
-            val micResp = readReg(transport, REG_KT02H20_ADC_PGA)
-            val idx = micResp?.getOrNull(7)?.toInt()?.and(0x07)
-            if (idx != null) KT02H20_MIC_PGA_DB.getOrNull(idx) ?: 14 else 14
+        val micGainDb = if (!isS19 && profile.schemeNo != SCHEME_TANCHJIM_NOMIC) {
+            if (isTanchjimDsp(profile)) {
+                val micResp = readReg(transport, REG_TANCHJIM_ADC_PGA)
+                val raw = micResp?.getOrNull(7)?.toInt()?.and(0xFF)
+                if (raw != null) {
+                    if (raw > 128) (raw - 256) / 2 else raw / 2
+                } else 0
+            } else {
+                val micResp = readReg(transport, REG_KT02H20_ADC_PGA)
+                val idx = micResp?.getOrNull(7)?.toInt()?.and(0x07)
+                if (idx != null) KT02H20_MIC_PGA_DB.getOrNull(idx) ?: 14 else 14
+            }
         } else 0
 
         val baseReg = if (isS19) 53 else 38
+        val compensate2X = usesCompensate2X(profile)
         val bands = (0 until bandCount).map { idx ->
             val r0 = readReg(transport, baseReg + idx * 2)
             val r1 = readReg(transport, baseReg + idx * 2 + 1)
@@ -81,7 +90,7 @@ class KtProtocol(
             if (r0 != null && r0.size >= 11 && r1 != null && r1.size >= 11) {
                 val gainRaw = BytePack.getI16Le(r0, 7)
                 val freqRaw = BytePack.getU16Le(r0, 9)
-                val freqHz = if (isS19) freqRaw else freqRaw * 2
+                val freqHz = if (compensate2X) freqRaw * 2 else freqRaw
                 val qRaw = BytePack.getU16Le(r1, 7)
                 val typeCode = r1[9].toInt() and 0x07
                 if (freqHz in 10..24000 && qRaw > 0) {
@@ -115,14 +124,14 @@ class KtProtocol(
         val reg = baseReg + (band.index.coerceIn(0, bandCount - 1) * 2)
 
         val gain10 = (band.gainDb * 10.0).roundToInt()
-        val freqPacked = if (isS19) band.frequencyHz else (band.frequencyHz / 2)
+        val freqPacked = if (usesCompensate2X(profile)) band.frequencyHz / 2 else band.frequencyHz
         val pkt0 = buildWriteReg(reg, gain10, freqPacked)
-        if (transport.transceive(pkt0, expectedSize = 20, timeoutMs = 450) == null) return false
+        if (sendWriteReg(transport, profile, pkt0) == null) return false
 
         val q1000 = (band.q * 1000.0).roundToInt().coerceIn(250, 16000)
         val filterWord = (band.filterType.ktCode and 0x07) or 0x08
         val pkt1 = buildWriteReg(reg + 1, q1000, filterWord)
-        return transport.transceive(pkt1, expectedSize = 20, timeoutMs = 450) != null
+        return sendWriteReg(transport, profile, pkt1) != null
     }
 
     override suspend fun writeAllEqBands(
@@ -140,42 +149,64 @@ class KtProtocol(
         }
         if (!refreshEqRam(transport, profile)) return false
         val presetReg = if (isSixBandProfile(profile)) 22 else 2
-        transport.transceive(buildWriteReg(presetReg, presetId, 0), expectedSize = 20, timeoutMs = 450)
+        sendWriteReg(transport, profile, buildWriteReg(presetReg, presetId, 0))
         return true
     }
 
     override suspend fun refreshEqRam(transport: DacTransport, profile: DacProfile): Boolean {
         val refreshReg = if (isSixBandProfile(profile)) 52 else 36
-        return transport.transceive(buildWriteReg(refreshReg, 1, 0), expectedSize = 20, timeoutMs = 450) != null
+        return sendWriteReg(transport, profile, buildWriteReg(refreshReg, 1, 0)) != null
     }
 
     override suspend fun saveToFlash(transport: DacTransport, profile: DacProfile, presetId: Int): Boolean {
         refreshEqRam(transport, profile)
         delay(20)
         val pkt = byteArrayOf(REPORT_ID.toByte(), 0, 0, 0, 0, 'S'.code.toByte(), 0, 0, 0, 0, 0)
-        return transport.transceive(pkt, expectedSize = 20, timeoutMs = 600) != null
+        return sendWriteReg(transport, profile, pkt, timeoutMs = 600) != null
     }
 
     override suspend fun resetEq(transport: DacTransport, profile: DacProfile): Boolean {
         val pkt = byteArrayOf(REPORT_ID.toByte(), 0, 0, 0, 0, 'C'.code.toByte(), 0, 0, 0, 0, 0)
-        return transport.transceive(pkt, expectedSize = 20, timeoutMs = 600) != null
+        return sendWriteReg(transport, profile, pkt, timeoutMs = 600) != null
     }
 
     private fun isSixBandProfile(profile: DacProfile): Boolean =
         profile.schemeNo == "19" || profile.schemeNo == "23" || isSixBand
 
+    private fun usesCompensate2X(profile: DacProfile): Boolean =
+        profile.compensate2X ?: !isSixBandProfile(profile)
+
+    private suspend fun sendWriteReg(
+        transport: DacTransport,
+        profile: DacProfile,
+        pkt: ByteArray,
+        timeoutMs: Int = 450
+    ): ByteArray? = if (profile.nonBlockingWrite) {
+        if (transport.send(pkt, timeoutMs = timeoutMs)) pkt else null
+    } else {
+        transport.transceive(pkt, expectedSize = 20, timeoutMs = timeoutMs)
+    }
+
     override suspend fun setGlobalGain(transport: DacTransport, profile: DacProfile, gainDb: Double): Boolean {
         val isS19 = isSixBandProfile(profile)
         val reg = if (isS19) REG_KT0231H_DAC_GAIN else REG_KT02H20_DAC_PGA
         val value = if (isS19) (-gainDb * 10.0).roundToInt() else dbToChipGainIndex(gainDb)
-        return transport.transceive(buildWriteReg(reg, value, 0), expectedSize = 20, timeoutMs = 450) != null
+        return sendWriteReg(transport, profile, buildWriteReg(reg, value, 0)) != null
     }
 
     override suspend fun setMicGain(transport: DacTransport, profile: DacProfile, gainDb: Int): Boolean {
-        if (isSixBandProfile(profile)) return false
+        if (isSixBandProfile(profile) || profile.schemeNo == SCHEME_TANCHJIM_NOMIC) return false
+        if (isTanchjimDsp(profile)) {
+            val clamped = gainDb.coerceIn(-15, 15)
+            val raw = if (clamped < 0) (clamped * 2) + 256 else clamped * 2
+            return sendWriteReg(transport, profile, buildWriteReg(REG_TANCHJIM_ADC_PGA, raw and 0xFF, 0)) != null
+        }
         val idx = dbToMicGainIndex(gainDb)
-        return transport.transceive(buildWriteReg(REG_KT02H20_ADC_PGA, idx, 0), expectedSize = 20, timeoutMs = 450) != null
+        return sendWriteReg(transport, profile, buildWriteReg(REG_KT02H20_ADC_PGA, idx, 0)) != null
     }
+
+    private fun isTanchjimDsp(profile: DacProfile): Boolean =
+        profile.schemeNo == SCHEME_TANCHJIM_DSP || profile.schemeNo == SCHEME_TANCHJIM_NOMIC
 
     private suspend fun readReg(transport: DacTransport, reg: Int): ByteArray? {
         val pkt = byteArrayOf(REPORT_ID.toByte(), (reg and 0xFF).toByte(), 0, 0, 0, 'R'.code.toByte(), 0, 0, 0, 0, 0)
@@ -220,9 +251,12 @@ class KtProtocol(
 
     companion object {
         const val REPORT_ID = 0x4B
+        const val SCHEME_TANCHJIM_DSP = "tanchjim_dsp"
+        const val SCHEME_TANCHJIM_NOMIC = "tanchjim_dsp_nomic"
         private const val REG_KT02H20_ADC_PGA = 58 // 0x3A (A_ADC)
         private const val REG_KT02H20_DAC_PGA = 59 // 0x3B (A_DAC)
         private const val REG_KT0231H_DAC_GAIN = 87
+        internal const val REG_TANCHJIM_ADC_PGA = 0x65 // 101: Tanchjim 0.5 dB step
 
         private val CHIP_DAC_DB = doubleArrayOf(
             -99.0, -18.0, -16.5, -15.0, -13.5, -12.0, -10.5, -9.0, -7.5, -6.0, -4.5, -3.0, -1.5, 0.0, 1.5, 3.0

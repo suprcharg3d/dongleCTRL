@@ -237,6 +237,7 @@ class MainActivity : ComponentActivity() {
                                 usbLogs = uiState.usbLogs,
                                 onThemeModeChange = viewModel::setThemeMode,
                                 onAutoApplyChange = viewModel::setAutoApplyEq,
+                                onAutoOpenUsbChange = viewModel::setAutoOpenOnUsb,
                                 onClearLogs = viewModel::clearUsbLogs
                             )
                         }

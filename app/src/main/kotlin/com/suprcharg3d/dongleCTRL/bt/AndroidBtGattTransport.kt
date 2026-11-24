@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
 import android.os.Build
 import com.suprcharg3d.dongleCTRL.protocol.DacTransport
@@ -84,7 +85,7 @@ class AndroidBtGattTransport private constructor(
         }
 
         val started = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            gatt.writeCharacteristic(writeChar, data, writeType) == BluetoothGatt.GATT_SUCCESS
+            gatt.writeCharacteristic(writeChar, data, writeType) == BluetoothStatusCodes.SUCCESS
         } else {
             @Suppress("DEPRECATION")
             run {
@@ -132,7 +133,10 @@ class AndroidBtGattTransport private constructor(
     companion object {
         private val CCCD_UUID: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
-        // Known (Service, Write, Notify) UUID profiles from FiiO Control z9/b.java
+        // Known (Service, Write, Notify) UUID profiles:
+        // - FiiO Control z9/b.java (GAIA, Universal)
+        // - NICEHCK OriG in (y80.java)
+        // - Moondrop bleSource (j30.java), Airoha Race (xk5/pc2), Jieli RCSP (i40/u00), Wireless Mic (xw5)
         private val KNOWN_PROFILES = listOf(
             Triple(
                 UUID.fromString("00001100-04a5-1000-1000-40ed981a04a5"),
@@ -153,6 +157,36 @@ class AndroidBtGattTransport private constructor(
                 UUID.fromString("00001C00-D102-11E1-9B23-000EFB0000A9"),
                 UUID.fromString("00001C01-D102-11E1-9B23-000EFB0000A9"),
                 UUID.fromString("00001C0F-D102-11E1-9B23-000EFB0000A9")
+            ),
+            // NICEHCK OriG in ("NHCKCTRL")
+            Triple(
+                UUID.fromString("0000a100-1000-8000-4e48-434b4354524c"),
+                UUID.fromString("0000a100-1001-8000-4e48-434b4354524c"),
+                UUID.fromString("0000a100-1002-8000-4e48-434b4354524c")
+            ),
+            // Moondrop bleSource
+            Triple(
+                UUID.fromString("9ECA0000-7F3A-4F32-9A38-A91B2C6E0100"),
+                UUID.fromString("9ECA0001-7F3A-4F32-9A38-A91B2C6E0100"),
+                UUID.fromString("9ECA0003-7F3A-4F32-9A38-A91B2C6E0100")
+            ),
+            // Airoha Race
+            Triple(
+                UUID.fromString("5052494D-2DAB-0341-6972-6F6861424C45"),
+                UUID.fromString("43484152-2DAB-3241-6972-6F6861424C45"),
+                UUID.fromString("43484152-2DAB-3141-6972-6F6861424C45")
+            ),
+            // Jieli RCSP
+            Triple(
+                UUID.fromString("0000ae00-0000-1000-8000-00805F9B34FB"),
+                UUID.fromString("0000ae01-0000-1000-8000-00805F9B34FB"),
+                UUID.fromString("0000ae02-0000-1000-8000-00805F9B34FB")
+            ),
+            // Moondrop Wireless Mic
+            Triple(
+                UUID.fromString("8af0b4d0-8d24-4b6b-8c14-47c81a400000"),
+                UUID.fromString("8af0b4d0-8d24-4b6b-8c14-47c81a400001"),
+                UUID.fromString("8af0b4d0-8d24-4b6b-8c14-47c81a400002")
             )
         )
 
@@ -264,10 +298,20 @@ class AndroidBtGattTransport private constructor(
         private fun findWriteAndNotifyChars(
             gatt: BluetoothGatt
         ): Pair<BluetoothGattCharacteristic, BluetoothGattCharacteristic>? {
+            val writeMask = BluetoothGattCharacteristic.PROPERTY_WRITE or
+                BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE
+            val notifyMask = BluetoothGattCharacteristic.PROPERTY_NOTIFY or
+                BluetoothGattCharacteristic.PROPERTY_INDICATE
             for ((svcUuid, wUuid, nUuid) in KNOWN_PROFILES) {
                 val svc = gatt.getService(svcUuid) ?: continue
-                val w = svc.getCharacteristic(wUuid) ?: continue
-                val n = svc.getCharacteristic(nUuid) ?: w
+                val wRaw = svc.getCharacteristic(wUuid)
+                val nRaw = svc.getCharacteristic(nUuid)
+                val w = wRaw?.takeIf { (it.properties and writeMask) != 0 }
+                    ?: svc.characteristics.firstOrNull { (it.properties and writeMask) != 0 }
+                    ?: continue
+                val n = nRaw?.takeIf { (it.properties and notifyMask) != 0 }
+                    ?: svc.characteristics.firstOrNull { (it.properties and notifyMask) != 0 }
+                    ?: w
                 return w to n
             }
             // Generic fallback: any non-standard service offering both writable and notifiable characteristics

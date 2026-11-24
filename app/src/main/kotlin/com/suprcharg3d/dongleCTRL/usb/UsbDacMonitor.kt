@@ -142,16 +142,15 @@ class UsbDacMonitor(
             requestPermission(entry.device)
             return null
         }
-        val allowEp0 = entry.effectiveProfile.protocol in setOf(
-            ProtocolFamily.FIIO_HID,
-            ProtocolFamily.FIIO_V2,
-            ProtocolFamily.FIIO_GIGAWIT
-        )
+        val allowEp0 = entry.effectiveProfile.protocol.usesEp0Control ||
+            entry.effectiveProfile.protocol == ProtocolFamily.TTGK_INFO
+        val preferEp0Only = entry.effectiveProfile.protocol == ProtocolFamily.MOONDROP_COMTURE ||
+            (entry.effectiveProfile.protocol == ProtocolFamily.MOONDROP_SPV && entry.effectiveProfile.productId == 0x012F)
         return if (entry.effectiveProfile.transport == TransportType.USB_SERIAL && entry.descriptor.hasCdcInterface) {
             AndroidUsbSerialTransport.open(manager, entry.device, entry.descriptor, logSink = ::log)
-                ?: AndroidUsbHidTransport.open(manager, entry.device, entry.descriptor, allowControlOnly = allowEp0, logSink = ::log)
+                ?: AndroidUsbHidTransport.open(manager, entry.device, entry.descriptor, allowControlOnly = allowEp0, preferControlOnly = preferEp0Only, logSink = ::log)
         } else {
-            AndroidUsbHidTransport.open(manager, entry.device, entry.descriptor, allowControlOnly = allowEp0, logSink = ::log)
+            AndroidUsbHidTransport.open(manager, entry.device, entry.descriptor, allowControlOnly = allowEp0, preferControlOnly = preferEp0Only, logSink = ::log)
                 ?: if (entry.descriptor.hasCdcInterface) {
                     AndroidUsbSerialTransport.open(manager, entry.device, entry.descriptor, logSink = ::log)
                 } else null

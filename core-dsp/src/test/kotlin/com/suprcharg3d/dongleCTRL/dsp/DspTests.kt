@@ -199,4 +199,11 @@ class DspTests {
         assertTrue(resolved is PresetBandHelper.BandResolution.Ready)
         assertEquals(5, (resolved as PresetBandHelper.BandResolution.Ready).bands.size)
     }
+
+    @Test
+    fun `flatBands returns empty list for zero or negative count and 32 bands for Echo-BP`() {
+        assertTrue(DefaultBands.flatBands(0).isEmpty())
+        assertTrue(DefaultBands.flatBands(-1).isEmpty())
+        assertEquals(32, DefaultBands.flatBands(32).size)
+    }
 }

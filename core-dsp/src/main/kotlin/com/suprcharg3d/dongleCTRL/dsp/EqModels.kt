@@ -62,6 +62,7 @@ object DefaultBands {
     )
 
     fun flatBands(count: Int): List<EqBand> {
+        if (count <= 0) return emptyList()
         val freqs = when (count) {
             5 -> fiveBandFreqs
             6 -> sixBandFreqs

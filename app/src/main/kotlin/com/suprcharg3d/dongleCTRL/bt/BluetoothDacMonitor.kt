@@ -16,11 +16,13 @@ import androidx.core.content.ContextCompat
 import com.suprcharg3d.dongleCTRL.protocol.DacCatalog
 import com.suprcharg3d.dongleCTRL.protocol.DacProfile
 import com.suprcharg3d.dongleCTRL.protocol.DacTransport
+import com.suprcharg3d.dongleCTRL.protocol.ProtocolFamily
 import com.suprcharg3d.dongleCTRL.protocol.TransportType
 import com.suprcharg3d.dongleCTRL.protocol.UsbDeviceDescriptor
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.UUID
 
 data class DetectedBluetoothDac(
     val device: BluetoothDevice,
@@ -56,19 +58,28 @@ class BluetoothDacMonitor(
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
     private val discoveredLe = LinkedHashMap<String, BluetoothDevice>()
+    private val discoveredLeUuids = LinkedHashMap<String, List<String>>()
     private val handler = Handler(Looper.getMainLooper())
     private var scanStopRunnable: Runnable? = null
 
     private val leCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val dev = result.device ?: return
-            val name = result.scanRecord?.deviceName ?: dev.name ?: return
             val addr = dev.address ?: return
-            if (catalog.matchBluetoothDevice(name, addr) != null) {
+            val name = result.scanRecord?.deviceName ?: dev.name
+            val uuids = result.scanRecord?.serviceUuids?.map { it.uuid.toString() }.orEmpty()
+            if (name == null && uuids.isEmpty()) return
+            if (catalog.matchBluetoothDevice(name, addr, serviceUuids = uuids) != null) {
+                var changed = false
                 if (!discoveredLe.containsKey(addr)) {
                     discoveredLe[addr] = dev
-                    refreshBondedAndDiscovered()
+                    changed = true
                 }
+                if (uuids.isNotEmpty() && discoveredLeUuids[addr] != uuids) {
+                    discoveredLeUuids[addr] = uuids
+                    changed = true
+                }
+                if (changed) refreshBondedAndDiscovered()
             }
         }
     }
@@ -96,23 +107,26 @@ class BluetoothDacMonitor(
         }
 
         val list = combined.values.mapNotNull { dev ->
-            val name = runCatching { dev.name }.getOrNull() ?: return@mapNotNull null
+            val name = runCatching { dev.name }.getOrNull()
             val addr = dev.address ?: return@mapNotNull null
-            val profile = catalog.matchBluetoothDevice(name, addr) ?: return@mapNotNull null
+            val leUuids = discoveredLeUuids[addr].orEmpty()
+            if (name == null && leUuids.isEmpty()) return@mapNotNull null
+            val profile = catalog.matchBluetoothDevice(name, addr, serviceUuids = leUuids) ?: return@mapNotNull null
             val desc = UsbDeviceDescriptor(
                 deviceKey = "bt_$addr",
                 vendorId = profile.vendorId,
                 productId = profile.productId ?: 0,
-                productName = name,
+                productName = name ?: profile.model,
                 manufacturerName = profile.brand,
                 hasHidInterface = false,
                 hasCdcInterface = false,
-                bluetoothAddress = addr
+                bluetoothAddress = addr,
+                btServiceUuids = leUuids
             )
             DetectedBluetoothDac(
                 device = dev,
                 address = addr,
-                displayName = name,
+                displayName = name ?: profile.model,
                 isBonded = runCatching { dev.bondState == BluetoothDevice.BOND_BONDED }.getOrDefault(false),
                 isAudioConnected = isDeviceConnected(dev),
                 descriptor = desc,
@@ -170,12 +184,65 @@ class BluetoothDacMonitor(
         if (!checkConnectPermission()) return null
 
         return if (entry.matchedProfile.transport == TransportType.BLUETOOTH_GATT) {
+            val sppUuid = entry.matchedProfile.btSppUuid
+                ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
             AndroidBtGattTransport.open(context, entry.device, entry.descriptor, logSink)
+                ?: if (sppUuid != null) {
+                    val framing = when (entry.matchedProfile.protocol) {
+                        ProtocolFamily.NICEHCK_ORIGIN_BT -> SppFramingMode.ORIGIN_V1
+                        ProtocolFamily.BLUETRUM_V2 -> SppFramingMode.BLUETRUM_V2
+                        ProtocolFamily.BES_MINO,
+                        ProtocolFamily.BLUETRUM_V1,
+                        ProtocolFamily.MOONDROP_AIROHA -> SppFramingMode.RAW_CHUNK
+                        else -> SppFramingMode.FIIO_DEFAULT
+                    }
+                    AndroidBtSppTransport.open(
+                        adapter = bt,
+                        device = entry.device,
+                        descriptor = entry.descriptor,
+                        logSink = logSink,
+                        sppUuid = sppUuid,
+                        framingMode = framing
+                    )
+                } else {
+                    null
+                }
         } else {
+            val sppUuid = resolveSppUuid(entry)
+            val framing = when (entry.matchedProfile.protocol) {
+                ProtocolFamily.BLUETRUM_V2 -> SppFramingMode.BLUETRUM_V2
+                ProtocolFamily.NICEHCK_ORIGIN_BT -> SppFramingMode.ORIGIN_V1
+                ProtocolFamily.BES_MINO,
+                ProtocolFamily.BLUETRUM_V1,
+                ProtocolFamily.MOONDROP_AIROHA -> SppFramingMode.RAW_CHUNK
+                else -> SppFramingMode.FIIO_DEFAULT
+            }
             // Dual / Classic BT: try SPP RFCOMM first, then BLE GATT fallback if SPP fails
-            AndroidBtSppTransport.open(bt, entry.device, entry.descriptor, logSink)
-                ?: AndroidBtGattTransport.open(context, entry.device, entry.descriptor, logSink)
+            AndroidBtSppTransport.open(
+                adapter = bt,
+                device = entry.device,
+                descriptor = entry.descriptor,
+                logSink = logSink,
+                sppUuid = sppUuid,
+                framingMode = framing
+            ) ?: AndroidBtGattTransport.open(context, entry.device, entry.descriptor, logSink)
         }
+    }
+
+    private fun resolveSppUuid(entry: DetectedBluetoothDac): UUID {
+        entry.matchedProfile.btSppUuid
+            ?.let { runCatching { UUID.fromString(it) }.getOrNull() }
+            ?.let { return it }
+
+        if (entry.matchedProfile.protocol == ProtocolFamily.QUALCOMM_GAIA_V3) {
+            val advertised = runCatching {
+                entry.device.uuids?.mapNotNull { it?.uuid }.orEmpty()
+            }.getOrDefault(emptyList())
+            if (AndroidBtSppTransport.SPP_UUID !in advertised && QUALCOMM_GAIA_SPP_UUID in advertised) {
+                return QUALCOMM_GAIA_SPP_UUID
+            }
+        }
+        return AndroidBtSppTransport.SPP_UUID
     }
 
     private fun isDeviceConnected(device: BluetoothDevice): Boolean {
@@ -202,5 +269,10 @@ class BluetoothDacMonitor(
         } else {
             true
         }
+    }
+
+    companion object {
+        private val QUALCOMM_GAIA_SPP_UUID: UUID =
+            UUID.fromString("00001107-D102-11E1-9B23-00025B00A5A5")
     }
 }
