@@ -70,6 +70,25 @@ class FiioBtProtocol(
             )
         }
 
+        val cbt = schema.commandBuilderType ?: 5
+        if (cbt == 0) {
+            return DacCapabilities(
+                maxBands = 0,
+                minGainDb = schema.gainMin,
+                maxGainDb = schema.gainMax,
+                minQ = 0.25,
+                maxQ = 8.0,
+                supportedFilters = emptyList(),
+                sampleRate = 48_000,
+                hasEqSwitch = false,
+                hasGlobalGain = false,
+                hasBattery = false,
+                presets = emptyList(),
+                supportsRamRefresh = false,
+                supportsFlashSave = false
+            )
+        }
+
         val volCtrl = schema.findControl("device_volume", "vol_output", "vol_of_bluetooth", "device_volume_nui")
         val balCtrl = schema.findControl("channel_balance")
         val filterCtrl = schema.findControl("filter", "utws17_filter")
@@ -78,16 +97,18 @@ class FiioBtProtocol(
         val uacCtrl = schema.findControl("uac", "uac_version", "uac_version_nui")
         val ledCtrl = schema.findControl("led_title", "Indicator_light_switch", "indicator_light_brightness", "rgb_switch")
         val presetOptions = schema.presets.map { NamedOption(it.id, it.label) }
+        val supportsPeqBands = schema.eqBandSupport && schema.bandCount > 0
         val hasDirectSwitch = schema.eqSwitchSupport && schema.eqSwitchSetCmd > 0
-        val effectiveEqSwitch = hasDirectSwitch || schema.bypassPresetId != null
+        val effectiveEqSwitch = hasDirectSwitch ||
+            (schema.bypassPresetId != null && (supportsPeqBands || presetOptions.isNotEmpty()))
 
         return DacCapabilities(
-            maxBands = schema.bandCount.coerceIn(5, 31),
+            maxBands = if (supportsPeqBands) schema.bandCount.coerceIn(5, 31) else 0,
             minGainDb = schema.gainMin,
             maxGainDb = schema.gainMax,
             minQ = 0.25,
             maxQ = 8.0,
-            supportedFilters = schema.supportedFilterTypes(),
+            supportedFilters = if (supportsPeqBands) schema.supportedFilterTypes() else emptyList(),
             sampleRate = 48_000,
             hasEqSwitch = effectiveEqSwitch,
             eqToggleUsesBypass = !hasDirectSwitch && schema.bypassPresetId != null,
@@ -110,9 +131,10 @@ class FiioBtProtocol(
             hasBattery = schema.batteryGetCmd > 0,
             presets = presetOptions,
             presetCategories = schema.presets.mapNotNull { p -> p.category?.let { p.id to it } }.toMap(),
-            writablePresetIds = schema.customPresetIds,
+            writablePresetIds = if (supportsPeqBands) schema.customPresetIds else emptySet(),
             bypassPresetId = schema.bypassPresetId,
-            canRenamePresets = schema.editEqNameSupport && schema.editEqNameSetCmd > 0,
+            canRenamePresets = (supportsPeqBands || presetOptions.isNotEmpty()) &&
+                schema.editEqNameSupport && schema.editEqNameSetCmd > 0,
             presetNameMaxChars = 8,
             supportsRamRefresh = false,
             supportsFlashSave = schema.eqSaveSupport,
@@ -134,9 +156,10 @@ class FiioBtProtocol(
 
         val isBle = transport.transportType == TransportType.BLUETOOTH_GATT
         val cbt = schema.commandBuilderType ?: 5
+        if (cbt == 0) {
+            return DacDeviceState(bands = emptyList())
+        }
         val useShell = isV3Cmd24Shell(cbt, VENDOR_FIIO, schema)
-
-        // Optional batch multi-query (`0x0F0101` / `ScBatchMultiQuery`) for supported BT devices
         val batchCache: Map<Int, ByteArray> = if (schema.batchQuerySupported && schema.batchQueryCmd > 0 && cbt in setOf(4, 5, 6)) {
             queryBatchCache(transport, schema, cbt, isBle, useShell)
         } else emptyMap()
@@ -386,10 +409,10 @@ class FiioBtProtocol(
         useShell24: Boolean,
         activePreset: Int
     ): List<EqBand> {
+        if (caps.maxBands <= 0 || !schema.eqBandSupport || schema.eqBandGetCmd <= 0) return emptyList()
         val count = caps.maxBands.coerceIn(1, 31)
         val effSchema = schema.copy(bandCount = count)
         val flat = FiioPeqCodec.flatBandsForSchema(effSchema)
-        if (!schema.eqBandSupport || schema.eqBandGetCmd <= 0) return flat
 
         if (schema.eqBandSupportBatch || schema.eqBandBatchGetCmd > 0 && schema.eqBandBatchGetCmd != schema.eqBandGetCmd) {
             val batchCmd = schema.eqBandBatchGetCmd.takeIf { it > 0 } ?: schema.eqBandGetCmd
@@ -914,6 +937,7 @@ class FiioBtProtocol(
         val schema = schemaFor(profile) ?: return null
         val isBle = profile.transport == TransportType.BLUETOOTH_GATT
         val cbt = schema.commandBuilderType ?: 5
+        if (cbt == 0) return null
         val useShell = isV3Cmd24Shell(cbt, VENDOR_FIIO, schema)
 
         // Extract command + payload from unsolicited BT notification/response frame
@@ -1245,6 +1269,7 @@ class FiioBtProtocol(
         vendorId: Int = VENDOR_FIIO,
         useShell24: Boolean = isV3Cmd24Shell(cbt, vendorId)
     ): Boolean {
+        if (cbt == 0) return false
         val pkt = buildPacket(cbt, isBle, cmd, payload, vendorId, useShell24)
         return transport.send(pkt, timeoutMs = 800)
     }
@@ -1258,6 +1283,7 @@ class FiioBtProtocol(
         vendorId: Int = VENDOR_FIIO,
         useShell24: Boolean = isV3Cmd24Shell(cbt, vendorId)
     ): ByteArray? {
+        if (cbt == 0) return null
         val pkt = buildPacket(cbt, isBle, cmd, payload, vendorId, useShell24)
         if (!transport.send(pkt, timeoutMs = 800)) return null
         val targetCmd16 = if (cmd > 0xFFFF) (cmd ushr 8) and 0xFFFF else (cmd and 0xFFFF)
@@ -1297,6 +1323,7 @@ class FiioBtProtocol(
         vendorId: Int = VENDOR_FIIO,
         useShell24: Boolean = isV3Cmd24Shell(cbt, vendorId)
     ): List<ByteArray> {
+        if (cbt == 0) return emptyList()
         val pkt = buildPacket(cbt, isBle, cmd, payload, vendorId, useShell24)
         if (!transport.send(pkt, timeoutMs = 800)) return emptyList()
         val targetCmd16 = if (cmd > 0xFFFF) (cmd ushr 8) and 0xFFFF else (cmd and 0xFFFF)

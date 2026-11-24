@@ -397,6 +397,35 @@ class ProtocolTests {
         assertEquals(0x04, bt11Pkt[4].toInt() and 0xFF)
         assertEquals("FIIO BT11", bt11Profile.model)
 
+        // BTR11 (cbt = 0, OTA-only) exposes zero PEQ/controls and does not send GAIA/EQ queries
+        val btr11Profile = dacCatalog.matchBluetoothDevice("FIIO BTR11", "AA:BB:CC:DD:EE:02")!!
+        assertEquals(0, btr11Profile.bandCount)
+        val btr11Caps = btDriver.buildCapabilities(btr11Profile)
+        assertEquals(0, btr11Caps.maxBands)
+        assertFalse(btr11Caps.hasEqSwitch)
+        assertFalse(btr11Caps.hasGlobalGain)
+        assertTrue(btr11Caps.supportedFilters.isEmpty())
+        assertTrue(btr11Caps.presets.isEmpty())
+        assertTrue(btr11Caps.extraControls.isEmpty())
+        val btr11Tx = FakeTransport(
+            descriptor = UsbDeviceDescriptor("btr11", 0x2972, 33, "FIIO BTR11", bluetoothAddress = "AA:BB:CC:DD:EE:02"),
+            transportType = TransportType.BLUETOOTH_GATT
+        )
+        val btr11State = btDriver.readDeviceState(btr11Tx, btr11Profile)
+        assertTrue(btr11State.bands.isEmpty())
+        assertTrue(btr11Tx.sent.isEmpty())
+        assertFalse(btDriver.setEqEnabled(btr11Tx, btr11Profile, true))
+        assertFalse(btDriver.selectPreset(btr11Tx, btr11Profile, 0))
+        assertFalse(btDriver.setGlobalGain(btr11Tx, btr11Profile, 1.0))
+
+        // UTWS3 (cbt = 3, eqBandSupport = false, presets-only) exposes presets without fake PEQ
+        val utws3Profile = dacCatalog.matchBluetoothDevice("FIIO UTWS3", "AA:BB:CC:DD:EE:03")!!
+        val utws3Caps = btDriver.buildCapabilities(utws3Profile)
+        assertEquals(0, utws3Caps.maxBands)
+        assertFalse(utws3Caps.hasEqSwitch)
+        assertFalse(utws3Caps.hasGlobalGain)
+        assertEquals(listOf(1, 2, 3), utws3Caps.presets.map { it.id })
+
         // BTR13 / K13 R2R / BR13 Bluetooth matching & packet framing
         val k13Bt = dacCatalog.matchBluetoothDevice("FIIO K13 R2R", "11:22:33:44:55:66")
         assertEquals(ProtocolFamily.FIIO_BT_UNIVERSAL, k13Bt?.protocol)
@@ -777,7 +806,10 @@ class ProtocolTests {
             protocol = ProtocolFamily.FIIO_HID,
             fiioDeviceType = 106
         )
-        assertFalse(hidProto.buildCapabilities(ka13Profile).canRenamePresets)
+        val ka13Caps = hidProto.buildCapabilities(ka13Profile)
+        assertFalse(ka13Caps.canRenamePresets)
+        assertEquals(0, ka13Caps.maxBands)
+        assertFalse(ka13Caps.hasEqSwitch)
     }
 
     @Test

@@ -131,6 +131,8 @@ class DacCatalog(
             else -> ProtocolFamily.FIIO_BT_GAIA
         }
         val txType = if (cm == 1) TransportType.BLUETOOTH_GATT else TransportType.BLUETOOTH_SPP
+        val hasControlBuilder = (schema.commandBuilderType ?: 0) != 0
+        val effectiveBandCount = if (hasControlBuilder && schema.eqBandSupport && schema.bandCount > 0) schema.bandCount else 0
         return DacProfile(
             id = "bt_fiio_${schema.deviceType}_${address.replace(":", "")}",
             brand = when {
@@ -143,7 +145,7 @@ class DacCatalog(
             productId = schema.deviceType,
             productNameMatch = schema.name,
             protocol = proto,
-            bandCount = schema.bandCount,
+            bandCount = effectiveBandCount,
             sampleRate = 48_000,
             minGainDb = schema.gainMin,
             maxGainDb = schema.gainMax,
@@ -175,8 +177,10 @@ class DacCatalog(
 
     private fun enrichWithFiioSchema(profile: DacProfile): DacProfile {
         val schema = schemaFor(profile) ?: return profile
+        val hasControlBuilder = (schema.commandBuilderType ?: 0) != 0
+        val effectiveBandCount = if (hasControlBuilder && schema.eqBandSupport && schema.bandCount > 0) schema.bandCount else 0
         return profile.copy(
-            bandCount = schema.bandCount,
+            bandCount = effectiveBandCount,
             minGainDb = schema.gainMin,
             maxGainDb = schema.gainMax,
             fiioDeviceType = schema.deviceType

@@ -166,17 +166,18 @@ class FiioHidProtocol(
             .mapNotNull { p -> p.category?.let { p.id to it } }
             .toMap()
 
+        val supportsPeqBands = supportsPeq && peqSchema.eqBandSupport && schema.bandCount > 0
         val hasDirectSwitch = peqSchema.eqSwitchSupport && peqSchema.eqSwitchSetCmd > 0
         val effectiveEqSwitch = supportsPeq && (hasDirectSwitch || schema.bypassPresetId != null)
         val filterOpts = filterCtrl?.options?.takeIf { it.isNotEmpty() } ?: DEFAULT_DAC_FILTERS
 
         return DacCapabilities(
-            maxBands = schema.bandCount.coerceIn(5, 31),
+            maxBands = if (supportsPeqBands) schema.bandCount.coerceIn(5, 31) else 0,
             minGainDb = schema.gainMin,
             maxGainDb = schema.gainMax,
             minQ = 0.25,
             maxQ = 8.0,
-            supportedFilters = peqSchema.supportedFilterTypes(),
+            supportedFilters = if (supportsPeqBands) peqSchema.supportedFilterTypes() else emptyList(),
             sampleRate = 48_000,
             hasEqSwitch = effectiveEqSwitch,
             eqToggleUsesBypass = !hasDirectSwitch && schema.bypassPresetId != null,
@@ -410,7 +411,7 @@ class FiioHidProtocol(
             }
         } else null
 
-        val bands = if (supportsPeq) {
+        val bands = if (supportsPeq && caps.maxBands > 0) {
             readPeqBandsHid(transport, peqSchema, rid, activePreset, caps, cmdDelay)
         } else {
             DefaultBands.flatBands(caps.maxBands)
